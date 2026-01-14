@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Asignación de Horarios Académicos</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Sistema de Asignación de Horarios Académicos</h1>
+            <p class="subtitle">Generación automática de horarios respetando disponibilidad y evitando conflictos</p>
+        </header>
+
+        <main>
+            <!-- Sección de controles -->
+            <section class="controls">
+                <button id="generateBtn" class="btn btn-primary">Generar Horario</button>
+                <button id="resetBtn" class="btn btn-secondary">Reiniciar</button>
+            </section>
+
+        
+            <section class="info-section">
+                <div class="info-card">
+                    <h3>Docentes</h3>
+                    <div id="docentesInfo" class="info-content"></div>
+                </div>
+                <div class="info-card">
+                    <h3>Materias</h3>
+                    <div id="materiasInfo" class="info-content"></div>
+                </div>
+                <div class="info-card">
+                    <h3>Grupos</h3>
+                    <div id="gruposInfo" class="info-content"></div>
+                </div>
+            </section>
+
+            
+            <section id="messagesSection" class="messages-section"></section>
+
+       
+            <section id="scheduleSection" class="schedule-section">
+                <h2>Horarios Generados</h2>
+                <div id="scheduleContainer"></div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Sistema desarrollado con HTML, CSS y JavaScript Vanilla | © 2026</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

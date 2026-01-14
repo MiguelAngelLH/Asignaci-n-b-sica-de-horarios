@@ -1,63 +1,54 @@
-/**
- * ==========================================
- * SIMULACIÓN DE GIT LOG (Commits)
- * ==========================================
- * 
- * commit a1b2c3d: Inicialización del proyecto. Estructura HTML y CSS base.
- * commit d4e5f6g: Definición del modelo de datos (Docentes, Grupos, Horarios).
- * commit h7i8j9k: Implementación del algoritmo de asignación automática (Greedy).
- * commit l0m1n2o: Agregada validación de conflictos (Docente/Grupo ocupado).
- * commit p3q4r5s: Implementación de interfaz de usuario y renderizado de tabla.
- * commit t6u7v8w: Feature: Drag & Drop para modificar horarios manualmente.
- * commit x9y0z1a: Feature: Persistencia de datos con LocalStorage.
- * commit b2c3d4e: Refactorización y comentarios finales para entrega.
- */
+
 
 // =====================
 // MODELO DE DATOS
 // =====================
 
 const teachers = [
-    { name: "Ana", subjects: ["Matemáticas", "Física"], availability: [1, 2, 3, 4, 5], color: "var(--teacher-1)" },
-    { name: "Luis", subjects: ["Química", "Biología"], availability: [2, 3, 4, 5, 6], color: "var(--teacher-2)" },
-    { name: "María", subjects: ["Historia", "Geografía"], availability: [1, 2, 3, 4], color: "var(--teacher-3)" },
-    { name: "Carlos", subjects: ["Inglés", "Literatura"], availability: [3, 4, 5, 6], color: "var(--teacher-4)" },
-    { name: "Sofía", subjects: ["Programación", "Matemáticas"], availability: [1, 2, 5, 6], color: "var(--teacher-5)" }
+    { name: "Ana", subjects: ["Matemáticas", "Física"], availability: [1, 2, 3, 4, 5, 6], color: "var(--teacher-1)" },
+    { name: "Luis", subjects: ["Química", "Biología"], availability: [1, 2, 3, 4, 5, 6], color: "var(--teacher-2)" },
+    { name: "María", subjects: ["Historia", "Geografía", "Civismo"], availability: [1, 2, 3, 4, 5], color: "var(--teacher-3)" },
+    { name: "Carlos", subjects: ["Inglés", "Literatura", "Artes"], availability: [1, 2, 3, 4, 5, 6], color: "var(--teacher-4)" },
+    { name: "Sofía", subjects: ["Programación", "Matemáticas", "Tecnología"], availability: [1, 2, 3, 4, 5, 6], color: "var(--teacher-5)" },
+    { name: "Pedro", subjects: ["Educación Física", "Salud"], availability: [1, 2, 3], color: "var(--teacher-6)" }
 ];
 
 const groups = [
-    { name: "1A", subjects: ["Matemáticas", "Química", "Historia", "Inglés", "Programación"] },
-    { name: "1B", subjects: ["Física", "Biología", "Geografía", "Literatura", "Matemáticas"] },
-    { name: "2A", subjects: ["Física", "Historia", "Matemáticas", "Inglés"] }
+    { name: "1A", subjects: ["Matemáticas", "Química", "Historia", "Inglés", "Programación", "Artes", "Educación Física"] },
+    { name: "1B", subjects: ["Física", "Biología", "Geografía", "Literatura", "Matemáticas", "Civismo", "Tecnología"] },
+    { name: "2A", subjects: ["Física", "Historia", "Matemáticas", "Inglés", "Programación", "Biología"] },
+    { name: "2B", subjects: ["Química", "Literatura", "Artes", "Salud", "Matemáticas", "Historia"] }
 ];
 
 const days = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 const hours = [1, 2, 3, 4, 5, 6];
 
-// =====================
-// ESTADO GLOBAL
-// =====================
+// Estado global del horario
+let currentSchedule = [];
+// currentSchedule: Array de { id, group, day, hour, subject, teacher, color }
 
-// schedule[hora][dia] = [ { group, subject, teacher, color } ]
-let currentSchedule = {};
+// Variable para Drag and Drop
+let draggedItem = null;
 
 // =====================
 // INICIALIZACIÓN
 // =====================
 
 document.addEventListener('DOMContentLoaded', () => {
-    initScheduleState();
     renderInfo();
-    loadSchedule(); // Intenta cargar datos guardados al iniciar
-});
 
-function initScheduleState() {
-    currentSchedule = {};
-    hours.forEach(h => {
-        currentSchedule[h] = {};
-        days.forEach(d => currentSchedule[h][d] = []);
+    document.getElementById("generateBtn").addEventListener("click", () => {
+        if (currentSchedule.length > 0 && !confirm("¿Generar nuevo horario? Se perderán los datos actuales.")) return;
+        generateSchedule();
     });
-}
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+        if (!confirm("¿Borrar todo?")) return;
+        currentSchedule = [];
+        renderSchedule();
+        showMessage("info", "Horario reiniciado.");
+    });
+});
 
 function renderInfo() {
     const docentesDiv = document.getElementById("docentesInfo");
@@ -68,348 +59,349 @@ function renderInfo() {
         docentesDiv.innerHTML = teachers.map(t => `
             <div class="info-item">
                 <span class="teacher-color" style="background:${t.color}"></span>
-                <strong>${t.name}</strong>: ${t.subjects.join(", ")} 
-                <br><small>Disp: Horas ${t.availability.join(", ")}</small>
+                <strong>${t.name}</strong>: ${t.subjects.join(", ")}
+                <br><small>Disp: Hrs ${t.availability.join(", ")}</small>
             </div>
         `).join("");
     }
 
     const allSubjects = [...new Set(teachers.flatMap(t => t.subjects))];
-    if (materiasDiv) materiasDiv.innerHTML = `<div class="info-item">${allSubjects.join(", ")}</div>`;
+    if (materiasDiv) {
+        materiasDiv.innerHTML = `<div class="info-item">${allSubjects.join(", ")}</div>`;
+    }
 
     if (gruposDiv) {
         gruposDiv.innerHTML = groups.map(g => `
             <div class="info-item">
-                <strong>Grupo ${g.name}</strong>: ${g.subjects.join(", ")}
+                <strong>Gpo ${g.name}</strong>: ${g.subjects.join(", ")}
             </div>
         `).join("");
     }
 }
 
 // =====================
-// GENERACIÓN DE HORARIO
+// LÓGICA DE GENERACIÓN
 // =====================
 
 function generateSchedule() {
-    initScheduleState(); // Reiniciar estado
+    currentSchedule = [];
     let conflicts = [];
-    
-    // Auxiliares para control de disponibilidad durante la generación
-    let teacherBusy = {};
+
+    // Mapas de ocupación para validación rápida
+    // busyTeachers[teacherName][day][hour] = true
+    const busyTeachers = {};
+
+    // busyGroups[groupName][day][hour] = true
+    const busyGroups = {};
+
+    // Inicializar mapas
     teachers.forEach(t => {
-        teacherBusy[t.name] = {};
-        days.forEach(d => teacherBusy[t.name][d] = {}); 
+        busyTeachers[t.name] = {};
+        days.forEach(d => busyTeachers[t.name][d] = {});
     });
-    
-    let groupBusy = {};
     groups.forEach(g => {
-        groupBusy[g.name] = {};
-        days.forEach(d => groupBusy[g.name][d] = {});
+        busyGroups[g.name] = {};
+        days.forEach(d => busyGroups[g.name][d] = {});
     });
+
+    // Intentamos asignar materias
+    // Para maximizar el uso de horas de docentes, ordenamos materias de grupos aleatoriamente
+    // pero iteramos exhaustivamente.
+
+    // Crear una lista de tareas: { group, subject }
+    let tasks = [];
+    groups.forEach(g => {
+        g.subjects.forEach(s => tasks.push({ group: g, subject: s }));
+    });
+
+    // Mezclar tareas para evitar patrones fijos
+    shuffleArray(tasks);
+
+    tasks.forEach(task => {
+        const { group, subject } = task;
+
+        // Buscar docentes candidatos
+        const candidates = teachers.filter(t => t.subjects.includes(subject));
+        shuffleArray(candidates); // Variedad
+
+        let assigned = false;
+
+        // Intentar asignar
+        for (const teacher of candidates) {
+            if (assigned) break;
+
+            // Buscar un slot (Día/Hora) disponible para ambos
+            // Mezclamos días y horas para no llenar siempre Lunes a las 8am primero
+            const shuffledDays = [...days];
+            shuffleArray(shuffledDays);
+            const shuffledHours = [...hours];
+            shuffleArray(shuffledHours);
+
+            for (const day of shuffledDays) {
+                if (assigned) break;
+                for (const hour of shuffledHours) {
+                    // 1. Docente dispone de esa hora globalmente?
+                    if (!teacher.availability.includes(hour)) continue;
+
+                    // 2. Docente ocupado ya?
+                    if (busyTeachers[teacher.name][day][hour]) continue;
+
+                    // 3. Grupo ocupado ya?
+                    if (busyGroups[group.name][day][hour]) continue;
+
+                    // ASIGNACIÓN
+                    const assignment = {
+                        id: Date.now() + Math.random(),
+                        group: group.name,
+                        day: day,
+                        hour: hour,
+                        subject: subject,
+                        teacher: teacher.name,
+                        color: teacher.color
+                    };
+
+                    currentSchedule.push(assignment);
+                    busyTeachers[teacher.name][day][hour] = true;
+                    busyGroups[group.name][day][hour] = true;
+
+                    assigned = true;
+                    break;
+                }
+            }
+        }
+
+        if (!assigned) {
+            conflicts.push(`Sin cupo para <strong>${subject}</strong> en <strong>${group.name}</strong>.`);
+        }
+    });
+
+    renderSchedule();
+
+    if (conflicts.length > 0) {
+        showMessage("warning", "Horario generado con conflictos (algunas materias no cupieron).");
+        renderConflicts(conflicts);
+    } else {
+        showMessage("success", "Horario generado exitosamente.");
+        document.getElementById("messagesSection").innerHTML = "";
+    }
+}
+
+// =====================
+// RENDERIZADO Y UI
+// =====================
+
+function renderSchedule() {
+    const container = document.getElementById("scheduleContainer");
+    container.innerHTML = "";
 
     groups.forEach(group => {
-        group.subjects.forEach(subject => {
-            let assigned = false;
+        const groupWrapper = document.createElement('div');
+        groupWrapper.className = 'group-schedule';
 
-            // MEJORA: Aleatorizar orden de búsqueda para distribuir mejor las clases en la semana
-            // En lugar de llenar siempre Lunes -> Viernes, probamos días al azar.
-            const shuffledDays = [...days].sort(() => Math.random() - 0.5);
-            const shuffledHours = [...hours].sort(() => Math.random() - 0.5);
+        const header = document.createElement('div');
+        header.className = 'group-header';
+        header.textContent = `Horario Grupo ${group.name}`;
+        groupWrapper.appendChild(header);
 
-            for (let d of shuffledDays) {
-                for (let h of shuffledHours) {
-                    if (assigned) break;
+        const table = document.createElement('table');
+        table.className = 'schedule-table';
 
-                    if (groupBusy[group.name][d][h]) continue;
+        const thead = document.createElement('thead');
+        const headRow = document.createElement('tr');
+        headRow.innerHTML = `<th>Hora</th>${days.map(d => `<th>${d}</th>`).join('')}`;
+        thead.appendChild(headRow);
+        table.appendChild(thead);
 
-                    const candidateTeacher = teachers.find(t => 
-                        t.subjects.includes(subject) && 
-                        t.availability.includes(h) &&
-                        !teacherBusy[t.name][d]?.[h]
-                    );
+        const tbody = document.createElement('tbody');
+        hours.forEach(hour => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td><strong>${hour}:00 - ${hour + 1}:00</strong></td>`;
 
-                    if (candidateTeacher) {
-                        currentSchedule[h][d].push({
-                            id: crypto.randomUUID(), // ID único para drag & drop
-                            group: group.name,
-                            subject: subject,
-                            teacher: candidateTeacher.name,
-                            color: candidateTeacher.color
-                        });
+            days.forEach(day => {
+                const td = document.createElement('td');
+                // Metadatos para Drop
+                td.dataset.group = group.name;
+                td.dataset.day = day;
+                td.dataset.hour = hour;
 
-                        teacherBusy[candidateTeacher.name][d][h] = true;
-                        groupBusy[group.name][d][h] = true;
-                        assigned = true;
-                    }
-                }
-                if (assigned) break;
-            }
+                // Listeners de Drop
+                td.addEventListener("dragover", handleDragOver);
+                td.addEventListener("drop", handleDrop);
+                td.addEventListener("dragleave", handleDragLeave);
 
-            if (!assigned) {
-                conflicts.push(`No se pudo asignar <strong>${subject}</strong> al grupo <strong>${group.name}</strong>.`);
-            }
-        });
-    });
-
-    renderSchedule(conflicts);
-    showMessage(conflicts.length > 0 ? "warning" : "success", 
-        conflicts.length > 0 ? "Horario generado con algunos conflictos." : "Horario generado exitosamente.");
-}
-
-// =====================
-// RENDERIZADO E INTERACTIVIDAD
-// =====================
-
-function renderSchedule(conflicts = []) {
-    const scheduleContainer = document.getElementById("scheduleContainer");
-    const messagesSection = document.getElementById("messagesSection");
-    
-    scheduleContainer.innerHTML = "";
-    
-    // Mostrar conflictos si se pasan
-    if (conflicts.length > 0) {
-        messagesSection.innerHTML = `
-            <div class="message message-error">
-                <div>
-                    <strong>Conflictos detectados:</strong>
-                    <ul>${conflicts.map(c => `<li>${c}</li>`).join("")}</ul>
-                </div>
-            </div>`;
-    }
-
-    const tableWrapper = document.createElement("div");
-    const table = document.createElement("table");
-    table.className = "schedule-table";
-
-    const thead = document.createElement("thead");
-    const headerRow = document.createElement("tr");
-    headerRow.innerHTML = "<th>Hora</th>" + days.map(d => `<th>${d}</th>`).join("");
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
-
-    const tbody = document.createElement("tbody");
-    hours.forEach(h => {
-        const row = document.createElement("tr");
-        const hourCell = document.createElement("td");
-        hourCell.innerHTML = `<strong>${h}:00 - ${h + 1}:00</strong>`;
-        row.appendChild(hourCell);
-
-        days.forEach(d => {
-            const cell = document.createElement("td");
-            // Dataset para identificar la celda destino en Drop
-            cell.dataset.day = d;
-            cell.dataset.hour = h;
-            
-            // Eventos de Drop en la celda
-            cell.addEventListener("dragover", handleDragOver);
-            cell.addEventListener("drop", handleDrop);
-            cell.addEventListener("dragleave", handleDragLeave);
-
-            const classes = currentSchedule[h][d];
-
-            if (classes && classes.length > 0) {
-                classes.forEach(cls => {
-                    const classDiv = document.createElement("div");
-                    classDiv.className = "class-cell";
-                    classDiv.draggable = true; // Hacemos "draggable" el elemento
-                    classDiv.style.backgroundColor = cls.color;
-                    classDiv.dataset.id = cls.id; // Vinculamos con el objeto en memoria
-                    classDiv.style.cursor = "move"; // Indicador visual
-                    
-                    // Eventos de Drag del elemento
-                    classDiv.addEventListener("dragstart", (e) => handleDragStart(e, cls, d, h));
-                    
-                    classDiv.innerHTML = `
-                        <span class="class-subject">${cls.group} - ${cls.subject}</span>
-                        <span class="class-teacher">${cls.teacher}</span>
+                // Buscar clase
+                const classFound = currentSchedule.find(c => c.group === group.name && c.day === day && c.hour === hour);
+                if (classFound) {
+                    td.innerHTML = `
+                        <div class="class-cell" draggable="true" style="background-color: ${classFound.color}" data-id="${classFound.id}">
+                            <div class="class-subject">${classFound.subject}</div>
+                            <div class="class-teacher">${classFound.teacher}</div>
+                        </div>
                     `;
-                    cell.appendChild(classDiv);
-                });
-            } else {
-                cell.className = "empty-cell";
-                cell.textContent = "-";
-            }
-            row.appendChild(cell);
+                    // Listener de Drag Start al elemento creado
+                    const cellDiv = td.querySelector('.class-cell');
+                    cellDiv.addEventListener("dragstart", (e) => handleDragStart(e, classFound));
+                } else {
+                    td.className = "empty-cell";
+                    td.textContent = "-";
+                }
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
         });
-        tbody.appendChild(row);
+        table.appendChild(tbody);
+        groupWrapper.appendChild(table);
+        container.appendChild(groupWrapper);
     });
-    table.appendChild(tbody);
-    
-    tableWrapper.appendChild(table);
-    scheduleContainer.appendChild(tableWrapper);
+}
+
+function renderConflicts(conflicts) {
+    const msgSection = document.getElementById("messagesSection");
+    msgSection.innerHTML = `
+        <div class="message message-error">
+            <strong>Conflictos no resueltos:</strong>
+            <ul>${conflicts.map(c => `<li>${c}</li>`).join('')}</ul>
+        </div>
+    `;
 }
 
 // =====================
-// DRAG AND DROP LÓGICA
+// DRAG AND DROP
 // =====================
 
-let draggedItem = null; // Almacena temporalmente datos del item arrastrado
-
-function handleDragStart(e, classData, day, hour) {
-    draggedItem = { ...classData, originDay: day, originHour: hour };
+function handleDragStart(e, classObj) {
+    draggedItem = classObj;
     e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", JSON.stringify(draggedItem));
-    
-    // Pequeño retardo visual para que parezca que se levanta
-    setTimeout(() => {
-        if (e.target) e.target.style.opacity = "0.4";
-    }, 0);
+    e.dataTransfer.setData("text/plain", JSON.stringify(classObj));
+    // Estilo visual
+    setTimeout(() => e.target.style.opacity = '0.5', 0);
 }
 
 function handleDragOver(e) {
-    e.preventDefault(); // Necesario para permitir el drop
+    e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    // Resaltar celda
-    if (e.currentTarget.tagName === "TD") {
-        e.currentTarget.style.backgroundColor = "#e8f0fe";
-        e.currentTarget.style.transition = "background-color 0.2s";
+    // Resaltar celda destino
+    if (e.currentTarget.tagName === 'TD') {
+        e.currentTarget.style.backgroundColor = "#e1f5fe";
     }
 }
 
 function handleDragLeave(e) {
-    if (e.currentTarget.tagName === "TD") {
+    if (e.currentTarget.tagName === 'TD') {
         e.currentTarget.style.backgroundColor = "";
     }
 }
 
 function handleDrop(e) {
     e.preventDefault();
-    const cell = e.currentTarget;
-    cell.style.backgroundColor = ""; // Quitar resaltado
+    const targetCell = e.currentTarget;
+    targetCell.style.backgroundColor = ""; // Limpiar color hover
 
     if (!draggedItem) return;
 
-    const targetDay = cell.dataset.day;
-    const targetHour = parseInt(cell.dataset.hour);
+    const targetGroup = targetCell.dataset.group;
+    const targetDay = targetCell.dataset.day;
+    const targetHour = parseInt(targetCell.dataset.hour);
 
-    // Si soltamos en la misma celda, no hacemos nada
-    if (targetDay === draggedItem.originDay && targetHour === draggedItem.originHour) {
-        renderSchedule(); // Restaurar opacidad
+    // 1. Validar que no movemos entre grupos (por simplicidad visual)
+    if (targetGroup !== draggedItem.group) {
+        showMessage("error", "No puedes mover una materia a otro grupo.");
+        renderSchedule();
         return;
     }
 
-    // VALIDACIONES
+    // 2. Si es la misma celda, cancelar
+    if (targetDay === draggedItem.day && targetHour === draggedItem.hour) {
+        renderSchedule();
+        return;
+    }
+
+    // 3. Validar movimiento
     const validation = validateMove(draggedItem, targetDay, targetHour);
-    if (!validation.valid) {
-        showMessage("error", `⛔ No se puede mover: ${validation.reason}`);
-        renderSchedule(); // Restaurar UI original
+    if (!validation.ok) {
+        showMessage("error", `Movimiento inválido: ${validation.reason}`);
+        renderSchedule();
         return;
     }
 
-    // APLICAR CAMBIOS EN EL MODELO
-    
-    // 1. Quitar de origen
-    currentSchedule[draggedItem.originHour][draggedItem.originDay] = 
-        currentSchedule[draggedItem.originHour][draggedItem.originDay]
-        .filter(c => c.id !== draggedItem.id);
+    // 4. Aplicar cambios
+    // Remover item antiguo
+    currentSchedule = currentSchedule.filter(c => c.id !== draggedItem.id);
 
-    // 2. Agregar a destino
-    const newItem = { ...draggedItem };
-    delete newItem.originDay;
-    delete newItem.originHour;
-    
-    currentSchedule[targetHour][targetDay].push(newItem);
+    // Crear nuevo item actualizado
+    const newItem = {
+        ...draggedItem,
+        day: targetDay,
+        hour: targetHour
+    };
 
-    // 3. Renderizar y Confirmar
+    currentSchedule.push(newItem);
+
     renderSchedule();
-    showMessage("success", "✅ Clase movida exitosamente.");
-    
-    // Limpiar var de control
+    showMessage("success", "Clase reprogramada correctamente.");
     draggedItem = null;
 }
 
-function validateMove(item, newDay, newHour) {
-    // 1. Disponibilidad del docente
-    const teacherObj = teachers.find(t => t.name === item.teacher);
-    if (!teacherObj.availability.includes(newHour)) {
-        return { valid: false, reason: `El docente ${item.teacher} no está disponible en la Hora ${newHour}.` };
+function validateMove(item, targetDay, targetHour) {
+    const teacher = teachers.find(t => t.name === item.teacher);
+
+    // A. Disponibilidad del profe
+    if (!teacher.availability.includes(targetHour)) {
+        return { ok: false, reason: `El docente ${item.teacher} no puede a las ${targetHour}:00.` };
     }
 
-    // Obtenemos clases en el destino para comparar
-    const classesInTarget = currentSchedule[newHour][newDay];
-
-    // 2. Conflicto de grupo (El grupo ya tiene clase a esa hora?)
-    const groupConflict = classesInTarget.find(c => c.group === item.group);
-    if (groupConflict) {
-        return { valid: false, reason: `El grupo ${item.group} ya tiene ${groupConflict.subject} a esa hora.` };
+    // B. Profe ocupado en otro grupo?
+    // Buscamos si hay alguna clase de este profe en ese día/hora, EXCEPTO la que estamos moviendo (que ya filtramos/igual es diferente ID)
+    const teacherBusy = currentSchedule.find(c =>
+        c.teacher === item.teacher &&
+        c.day === targetDay &&
+        c.hour === targetHour &&
+        c.id !== item.id
+    );
+    if (teacherBusy) {
+        return { ok: false, reason: `El docente ${item.teacher} ya está ocupado en el Gpo ${teacherBusy.group}.` };
     }
 
-    // 3. Conflicto de docente (El docente ya da clase a esa hora?)
-    const teacherConflict = classesInTarget.find(c => c.teacher === item.teacher);
-    if (teacherConflict) {
-        return { valid: false, reason: `El docente ${item.teacher} ya está ocupado con el grupo ${teacherConflict.group} a esa hora.` };
+    // C. El grupo ya tiene clase?
+    // Buscamos si este grupo tiene clase aquí
+    const groupBusy = currentSchedule.find(c =>
+        c.group === item.group &&
+        c.day === targetDay &&
+        c.hour === targetHour &&
+        c.id !== item.id
+    );
+    if (groupBusy) {
+        return { ok: false, reason: `El grupo ya tiene la clase de ${groupBusy.subject} a esa hora.` };
     }
 
-    return { valid: true };
+    return { ok: true };
 }
+
 
 // =====================
-// PERSISTENCIA Y UTILIDADES
+// UTILIDADES
 // =====================
-
-function saveSchedule() {
-    localStorage.setItem("myScheduleData", JSON.stringify(currentSchedule));
-    showMessage("success", "💾 Horario guardado en el navegador.");
-}
-
-function loadSchedule() {
-    const saved = localStorage.getItem("myScheduleData");
-    if (saved) {
-        try {
-            currentSchedule = JSON.parse(saved);
-            renderSchedule();
-            setTimeout(() => showMessage("info", "📂 Se ha cargado tu horario guardado."), 500);
-        } catch (e) {
-            console.error("Error cargando datos", e);
-            initScheduleState();
-        }
-    }
-}
 
 function showMessage(type, text) {
-    const messagesSection = document.getElementById("messagesSection");
-    let cssClass = "message-info";
-    if (type === "success") cssClass = "message-success";
-    if (type === "error") cssClass = "message-error";
-    if (type === "warning") cssClass = "message-warning";
+    const msgSection = document.getElementById("messagesSection");
+    if (type === 'success') msgSection.innerHTML = '';
 
-    messagesSection.innerHTML = `
-        <div class="message ${cssClass}">
-            ${text}
-        </div>
-    `;
-    
-    // Auto-ocultar después de 4 segundos
-    setTimeout(() => {
-        // Solo limpiar si sigue siendo el mismo mensaje
-        if(messagesSection.innerHTML.includes(text)) {
-            messagesSection.innerHTML = "";
-        }
-    }, 4000);
+    const div = document.createElement('div');
+    div.className = `message message-${type}`;
+    div.textContent = text;
+
+    if (type !== 'error') {
+        setTimeout(() => div.remove(), 4000);
+        msgSection.prepend(div);
+    } else {
+        msgSection.prepend(div);
+    }
 }
 
-// =====================
-// EVENTOS
-// =====================
-
-document.getElementById("generateBtn").addEventListener("click", () => {
-    // Si ya hay datos, preguntar antes de sobrescribir
-    const hasData = Object.values(currentSchedule).some(hourObj => 
-        Object.values(hourObj).some(arr => arr.length > 0)
-    );
-
-    if(!hasData || confirm("¿Generar un nuevo horario sobrescribirá el actual y perderás tus cambios manuales?")) {
-        generateSchedule();
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
     }
-});
+}
 
-document.getElementById("saveBtn").addEventListener("click", saveSchedule);
-
-document.getElementById("resetBtn").addEventListener("click", () => {
-    if(confirm("¿Seguro que deseas borrar todo el horario y los datos guardados?")) {
-        initScheduleState();
-        renderSchedule();
-        localStorage.removeItem("myScheduleData");
-        showMessage("info", "🗑️ Horario reiniciado.");
-    }
-});
